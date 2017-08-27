@@ -2,37 +2,26 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-
-#if USE_CSHARP_SQLITE
-using Sqlite3 = Community.CsharpSqlite.Sqlite3;
-using Sqlite3DatabaseHandle = Community.CsharpSqlite.Sqlite3.sqlite3;
-using Sqlite3Statement = Community.CsharpSqlite.Sqlite3.Vdbe;
-#elif USE_WP8_NATIVE_SQLITE
-using Sqlite3 = Sqlite.Sqlite3;
-using Sqlite3DatabaseHandle = Sqlite.Database;
-using Sqlite3Statement = Sqlite.Statement;
-#else
 using Sqlite3DatabaseHandle = System.IntPtr;
 using Sqlite3Statement = System.IntPtr;
-#endif
 
 public class SQLiteCommand
 {
-    SQLiteConnection _conn;
-    private List<Binding> _bindings;
+    private SQLiteConnection connection;
+    private List<Binding> bindings;
 
     public string CommandText { get; set; }
 
-    internal SQLiteCommand(SQLiteConnection conn)
+    internal SQLiteCommand(SQLiteConnection InConnection)
     {
-        _conn = conn;
-        _bindings = new List<Binding>();
+        connection = InConnection;
+        bindings = new List<Binding>();
         CommandText = "";
     }
 
     public int ExecuteNonQuery()
     {
-        if (_conn.Trace)
+        if (connection.IsShowTrace)
         {
             Debug.WriteLine("Executing: " + this);
         }
@@ -43,17 +32,17 @@ public class SQLiteCommand
         switch (r)
         {
             case SQLite3.Result.Done:
-                int rowsAffected = SQLite3.Changes(_conn.Handle);
+                int rowsAffected = SQLite3.Changes(connection.Handle);
                 return rowsAffected;
 
             case SQLite3.Result.Error:
-                string msg = SQLite3.GetErrmsg(_conn.Handle);
+                string msg = SQLite3.GetErrmsg(connection.Handle);
                 throw SQLiteException.New(r, msg);
 
             case SQLite3.Result.Constraint:
-                if (SQLite3.ExtendedErrCode(_conn.Handle) == SQLite3.ExtendedResult.ConstraintNotNull)
+                if (SQLite3.ExtendedErrCode(connection.Handle) == SQLite3.ExtendedResult.ConstraintNotNull)
                 {
-                    throw NotNullConstraintViolationException.New(r, SQLite3.GetErrmsg(_conn.Handle));
+                    throw NotNullConstraintViolationException.New(r, SQLite3.GetErrmsg(connection.Handle));
                 }
                 break;
         }
@@ -63,12 +52,12 @@ public class SQLiteCommand
 
     public IEnumerable<T> ExecuteDeferredQuery<T>()
     {
-        return ExecuteDeferredQuery<T>(_conn.GetMapping(typeof(T)));
+        return ExecuteDeferredQuery<T>(connection.GetMapping(typeof(T)));
     }
 
     public List<T> ExecuteQuery<T>()
     {
-        return ExecuteDeferredQuery<T>(_conn.GetMapping(typeof(T))).ToList();
+        return ExecuteDeferredQuery<T>(connection.GetMapping(typeof(T))).ToList();
     }
 
     public List<T> ExecuteQuery<T>(TableMapping map)
@@ -95,7 +84,7 @@ public class SQLiteCommand
 
     public IEnumerable<T> ExecuteDeferredQuery<T>(TableMapping map)
     {
-        if (_conn.Trace)
+        if (connection.IsShowTrace)
         {
             Debug.WriteLine("Executing Query: " + this);
         }
@@ -134,7 +123,7 @@ public class SQLiteCommand
 
     public T ExecuteScalar<T>()
     {
-        if (_conn.Trace)
+        if (connection.IsShowTrace)
         {
             Debug.WriteLine("Executing Query: " + this);
         }
@@ -156,7 +145,7 @@ public class SQLiteCommand
             }
             else
             {
-                throw SQLiteException.New(r, SQLite3.GetErrmsg(_conn.Handle));
+                throw SQLiteException.New(r, SQLite3.GetErrmsg(connection.Handle));
             }
         }
         finally
@@ -169,7 +158,7 @@ public class SQLiteCommand
 
     public void Bind(string name, object val)
     {
-        _bindings.Add(new Binding
+        bindings.Add(new Binding
         {
             Name = name,
             Value = val
@@ -183,10 +172,10 @@ public class SQLiteCommand
 
     public override string ToString()
     {
-        var parts = new string[1 + _bindings.Count];
+        var parts = new string[1 + bindings.Count];
         parts[0] = CommandText;
         var i = 1;
-        foreach (var b in _bindings)
+        foreach (var b in bindings)
         {
             parts[i] = string.Format("  {0}: {1}", i - 1, b.Value);
             i++;
@@ -196,7 +185,7 @@ public class SQLiteCommand
 
     private Sqlite3Statement Prepare()
     {
-        var stmt = SQLite3.Prepare2(_conn.Handle, CommandText);
+        var stmt = SQLite3.Prepare2(connection.Handle, CommandText);
         BindAll(stmt);
         return stmt;
     }
@@ -209,7 +198,7 @@ public class SQLiteCommand
     void BindAll(Sqlite3Statement stmt)
     {
         int nextIdx = 1;
-        foreach (var b in _bindings)
+        foreach (var b in bindings)
         {
             if (b.Name != null)
             {
@@ -220,7 +209,7 @@ public class SQLiteCommand
                 b.Index = nextIdx++;
             }
 
-            BindParameter(stmt, b.Index, b.Value, _conn.StoreDateTimeAsTicks);
+            BindParameter(stmt, b.Index, b.Value, connection.StoreDateTimeAsTicks);
         }
     }
 
@@ -276,13 +265,9 @@ public class SQLiteCommand
             else if (value is DateTimeOffset)
             {
                 SQLite3.BindInt64(stmt, index, ((DateTimeOffset)value).UtcTicks);
-#if !NETFX_CORE
             }
             else if (value.GetType().IsEnum)
             {
-#else
-				} else if (value.GetType().GetTypeInfo().IsEnum) {
-#endif
                 SQLite3.BindInt(stmt, index, Convert.ToInt32(value));
             }
             else if (value is byte[])
@@ -343,7 +328,7 @@ public class SQLiteCommand
             }
             else if (clrType == typeof(DateTime))
             {
-                if (_conn.StoreDateTimeAsTicks)
+                if (connection.StoreDateTimeAsTicks)
                 {
                     return new DateTime(SQLite3.ColumnInt64(stmt, index));
                 }

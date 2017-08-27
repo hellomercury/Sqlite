@@ -109,22 +109,22 @@ public class TableQuery<T> : BaseTableQuery, IEnumerable<T>
 
     public TableQuery<T> OrderBy<U>(Expression<Func<T, U>> orderExpr)
     {
-        return AddOrderBy<U>(orderExpr, true);
+        return AddOrderBy(orderExpr, true);
     }
 
     public TableQuery<T> OrderByDescending<U>(Expression<Func<T, U>> orderExpr)
     {
-        return AddOrderBy<U>(orderExpr, false);
+        return AddOrderBy(orderExpr, false);
     }
 
     public TableQuery<T> ThenBy<U>(Expression<Func<T, U>> orderExpr)
     {
-        return AddOrderBy<U>(orderExpr, true);
+        return AddOrderBy(orderExpr, true);
     }
 
     public TableQuery<T> ThenByDescending<U>(Expression<Func<T, U>> orderExpr)
     {
-        return AddOrderBy<U>(orderExpr, false);
+        return AddOrderBy(orderExpr, false);
     }
 
     private TableQuery<T> AddOrderBy<U>(Expression<Func<T, U>> orderExpr, bool asc)
@@ -133,7 +133,7 @@ public class TableQuery<T> : BaseTableQuery, IEnumerable<T>
         {
             var lambda = (LambdaExpression)orderExpr;
 
-            MemberExpression mem = null;
+            MemberExpression mem;
 
             var unary = lambda.Body as UnaryExpression;
             if (unary != null && unary.NodeType == ExpressionType.Convert)
@@ -284,7 +284,7 @@ public class TableQuery<T> : BaseTableQuery, IEnumerable<T>
                 args[i] = CompileExpr(call.Arguments[i], queryArgs);
             }
 
-            var sqlCall = "";
+            string sqlCall;
 
             if (call.Method.Name == "Like" && args.Length == 2)
             {
@@ -387,36 +387,20 @@ public class TableQuery<T> : BaseTableQuery, IEnumerable<T>
                 // Get the member value
                 //
                 object val = null;
-
-#if !NETFX_CORE
+                
                 if (mem.Member.MemberType == MemberTypes.Property)
                 {
-#else
-					if (mem.Member is PropertyInfo) {
-#endif
                     var m = (PropertyInfo)mem.Member;
                     val = m.GetValue(obj, null);
-#if !NETFX_CORE
                 }
                 else if (mem.Member.MemberType == MemberTypes.Field)
                 {
-#else
-					} else if (mem.Member is FieldInfo) {
-#endif
-#if SILVERLIGHT
-						val = Expression.Lambda (expr).Compile ().DynamicInvoke ();
-#else
                     var m = (FieldInfo)mem.Member;
                     val = m.GetValue(obj);
-#endif
                 }
                 else
                 {
-#if !NETFX_CORE
                     throw new NotSupportedException("MemberExpr: " + mem.Member.MemberType);
-#else
-						throw new NotSupportedException ("MemberExpr: " + mem.Member.DeclaringType);
-#endif
                 }
 
                 //

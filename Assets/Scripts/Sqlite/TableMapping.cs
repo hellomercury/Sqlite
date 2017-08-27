@@ -23,30 +23,17 @@ public class TableMapping
     {
         MappedType = type;
 
-#if NETFX_CORE
-			var tableAttr = (TableAttribute)System.Reflection.CustomAttributeExtensions
-                .GetCustomAttribute(type.GetTypeInfo(), typeof(TableAttribute), true);
-#else
         var tableAttr = (TableAttribute)type.GetCustomAttributes(typeof(TableAttribute), true).FirstOrDefault();
-#endif
 
         TableName = tableAttr != null ? tableAttr.Name : MappedType.Name;
-
-#if !NETFX_CORE
+        
         var props = MappedType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.SetProperty);
-#else
-			var props = from p in MappedType.GetRuntimeProperties()
-						where ((p.GetMethod != null && p.GetMethod.IsPublic) || (p.SetMethod != null && p.SetMethod.IsPublic) || (p.GetMethod != null && p.GetMethod.IsStatic) || (p.SetMethod != null && p.SetMethod.IsStatic))
-						select p;
-#endif
+
         var cols = new List<Column>();
         foreach (var p in props)
         {
-#if !NETFX_CORE
             var ignore = p.GetCustomAttributes(typeof(IgnoreAttribute), true).Length > 0;
-#else
-				var ignore = p.GetCustomAttributes (typeof(IgnoreAttribute), true).Count() > 0;
-#endif
+
             if (p.CanWrite && !ignore)
             {
                 cols.Add(new Column(p, createFlags));

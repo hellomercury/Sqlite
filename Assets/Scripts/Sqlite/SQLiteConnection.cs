@@ -5,25 +5,14 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
-
-#if USE_CSHARP_SQLITE
-using Sqlite3 = Community.CsharpSqlite.Sqlite3;
-using Sqlite3DatabaseHandle = Community.CsharpSqlite.Sqlite3.sqlite3;
-using Sqlite3Statement = Community.CsharpSqlite.Sqlite3.Vdbe;
-#elif USE_WP8_NATIVE_SQLITE
-using Sqlite3 = Sqlite.Sqlite3;
-using Sqlite3DatabaseHandle = Sqlite.Database;
-using Sqlite3Statement = Sqlite.Statement;
-#else
 using Sqlite3DatabaseHandle = System.IntPtr;
 using Sqlite3Statement = System.IntPtr;
-#endif
 
 
 /// <summary>
 /// Represents an open connection to a SQLite database.
 /// </summary>
-public partial class SQLiteConnection : IDisposable
+public class SQLiteConnection : IDisposable
 {
     private bool _open;
     private TimeSpan _busyTimeout;
@@ -42,7 +31,8 @@ public partial class SQLiteConnection : IDisposable
 
     public bool TimeExecution { get; set; }
 
-    public bool Trace { get; set; }
+    //是否显示log
+    public bool IsShowTrace { get; set; }
 
     public bool StoreDateTimeAsTicks { get; private set; }
 
@@ -82,21 +72,13 @@ public partial class SQLiteConnection : IDisposable
 
         DatabasePath = databasePath;
 
-#if NETFX_CORE
-			SQLite3.SetDirectory(/*temp directory type*/2, Windows.Storage.ApplicationData.Current.TemporaryFolder.Path);
-#endif
-
         Sqlite3DatabaseHandle handle;
 
-#if SILVERLIGHT || USE_CSHARP_SQLITE
-            var r = SQLite3.Open (databasePath, out handle, (int)openFlags, IntPtr.Zero);
-#else
         // open using the byte[]
         // in the case where the path may include Unicode
         // force open to using UTF-8 using sqlite3_open_v2
         var databasePathAsBytes = GetNullTerminatedUtf8(DatabasePath);
         var r = SQLite3.Open(databasePathAsBytes, out handle, (int)openFlags, IntPtr.Zero);
-#endif
 
         Handle = handle;
         if (r != SQLite3.Result.OK)
@@ -507,7 +489,7 @@ public partial class SQLiteConnection : IDisposable
     /// in the command text for each of the arguments and then executes that command.
     /// Use this method instead of Query when you don't expect rows back. Such cases include
     /// INSERTs, UPDATEs, and DELETEs.
-    /// You can set the Trace or TimeExecution properties of the connection
+    /// You can set the IsShowTrace or TimeExecution properties of the connection
     /// to profile execution.
     /// </summary>
     /// <param name="query">
@@ -952,13 +934,8 @@ public partial class SQLiteConnection : IDisposable
                 // TODO: Mild race here, but inescapable without locking almost everywhere.
                 if (0 <= depth && depth < _transactionDepth)
                 {
-#if NETFX_CORE
-                        Volatile.Write (ref _transactionDepth, depth);
-#elif SILVERLIGHT
-						_transactionDepth = depth;
-#else
                     Thread.VolatileWrite(ref _transactionDepth, depth);
-#endif
+
                     Execute(cmd + savepoint);
                     return;
                 }
@@ -1205,28 +1182,6 @@ public partial class SQLiteConnection : IDisposable
 
         var map = GetMapping(objType);
 
-#if NETFX_CORE
-            if (map.PK != null && map.PK.IsAutoGuid)
-            {
-                // no GetProperty so search our way up the inheritance chain till we find it
-                PropertyInfo prop;
-                while (objType != null)
-                {
-                    var info = objType.GetTypeInfo();
-                    prop = info.GetDeclaredProperty(map.PK.PropertyName);
-                    if (prop != null) 
-                    {
-                        if (prop.GetValue(obj, null).Equals(Guid.Empty))
-                        {
-                            prop.SetValue(obj, Guid.NewGuid(), null);
-                        }
-                        break; 
-                    }
-
-                    objType = info.BaseType;
-                }
-            }
-#else
         if (map.PK != null && map.PK.IsAutoGuid)
         {
             var prop = objType.GetProperty(map.PK.PropertyName);
@@ -1238,8 +1193,6 @@ public partial class SQLiteConnection : IDisposable
                 }
             }
         }
-#endif
-
 
         var replacing = string.Compare(extra, "OR REPLACE", StringComparison.OrdinalIgnoreCase) == 0;
 
@@ -1482,31 +1435,5 @@ public partial class SQLiteConnection : IDisposable
                 _open = false;
             }
         }
-    }
-}
-
-/// <summary>
-/// Represents a parsed connection string.
-/// </summary>
-class SQLiteConnectionString
-{
-    public string ConnectionString { get; private set; }
-    public string DatabasePath { get; private set; }
-    public bool StoreDateTimeAsTicks { get; private set; }
-
-#if NETFX_CORE
-		static readonly string MetroStyleDataPath = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
-#endif
-
-    public SQLiteConnectionString(string databasePath, bool storeDateTimeAsTicks)
-    {
-        ConnectionString = databasePath;
-        StoreDateTimeAsTicks = storeDateTimeAsTicks;
-
-#if NETFX_CORE
-			DatabasePath = System.IO.Path.Combine (MetroStyleDataPath, databasePath);
-#else
-        DatabasePath = databasePath;
-#endif
     }
 }

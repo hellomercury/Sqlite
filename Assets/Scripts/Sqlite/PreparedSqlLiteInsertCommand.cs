@@ -23,7 +23,7 @@ public class PreparedSqlLiteInsertCommand : IDisposable
 
     public int ExecuteNonQuery(object[] source)
     {
-        if (Connection.Trace)
+        if (Connection.IsShowTrace)
         {
             Debug.WriteLine("Executing: " + CommandText);
         }

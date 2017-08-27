@@ -68,13 +68,9 @@ public static class Orm
         else if (clrType == typeof(DateTimeOffset))
         {
             return "bigint";
-#if !NETFX_CORE
         }
         else if (clrType.IsEnum)
         {
-#else
-			} else if (clrType.GetTypeInfo().IsEnum) {
-#endif
             return "integer";
         }
         else if (clrType == typeof(byte[]))
@@ -94,39 +90,23 @@ public static class Orm
     public static bool IsPK(MemberInfo p)
     {
         var attrs = p.GetCustomAttributes(typeof(PrimaryKeyAttribute), true);
-#if !NETFX_CORE
+
         return attrs.Length > 0;
-#else
-			return attrs.Count() > 0;
-#endif
     }
 
     public static string Collation(MemberInfo p)
     {
         var attrs = p.GetCustomAttributes(typeof(CollationAttribute), true);
-#if !NETFX_CORE
-        if (attrs.Length > 0)
-        {
-            return ((CollationAttribute)attrs[0]).Value;
-#else
-			if (attrs.Count() > 0) {
-                return ((CollationAttribute)attrs.First()).Value;
-#endif
-        }
-        else
-        {
-            return string.Empty;
-        }
+
+        if (attrs.Length > 0) return ((CollationAttribute)attrs[0]).Value;
+        else return string.Empty;
     }
 
     public static bool IsAutoInc(MemberInfo p)
     {
         var attrs = p.GetCustomAttributes(typeof(AutoIncrementAttribute), true);
-#if !NETFX_CORE
+
         return attrs.Length > 0;
-#else
-			return attrs.Count() > 0;
-#endif
     }
 
     public static IEnumerable<IndexedAttribute> GetIndices(MemberInfo p)
@@ -138,13 +118,8 @@ public static class Orm
     public static int? MaxStringLength(PropertyInfo p)
     {
         var attrs = p.GetCustomAttributes(typeof(MaxLengthAttribute), true);
-#if !NETFX_CORE
-        if (attrs.Length > 0)
-            return ((MaxLengthAttribute)attrs[0]).Value;
-#else
-			if (attrs.Count() > 0)
-				return ((MaxLengthAttribute)attrs.First()).Value;
-#endif
+
+        if (attrs.Length > 0) return ((MaxLengthAttribute)attrs[0]).Value;
 
         return null;
     }
@@ -152,10 +127,7 @@ public static class Orm
     public static bool IsMarkedNotNull(MemberInfo p)
     {
         var attrs = p.GetCustomAttributes(typeof(NotNullAttribute), true);
-#if !NETFX_CORE
+
         return attrs.Length > 0;
-#else
-	return attrs.Count() > 0;
-#endif
     }
 }
